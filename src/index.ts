@@ -9,6 +9,7 @@ import { apiKeyAuth } from './utils/apiKeyAuth.js';
 import { webhooks } from './routes/webhooks.js';
 import { campaigns } from './routes/campaigns.js';
 import { attachScheduler } from './services/campaignService.js';
+import { events } from './routes/events.js';
 
 dotenv.config();
 
@@ -23,6 +24,7 @@ app.use('/api', templates);
 app.use('/api', send);
 app.use('/api', campaigns);
 app.use('/api', webhooks);
+app.use('/api', events);
 
 const PORT = Number(process.env.PORT || 8085);
 

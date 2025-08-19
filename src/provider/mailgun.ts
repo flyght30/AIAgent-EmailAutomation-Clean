@@ -6,8 +6,15 @@ export class MailgunProvider implements EmailProvider {
   private domain: string;
 
   constructor(apiKey?: string, domain?: string) {
-    this.apiKey = apiKey || '';
-    this.domain = domain || '';
+    this.apiKey = apiKey || process.env.MAILGUN_API_KEY || '';
+    this.domain = domain || process.env.MAILGUN_DOMAIN || '';
+  }
+
+  private resolveFromEmail() {
+    const envFrom = process.env.FROM_EMAIL;
+    if (envFrom && envFrom.includes('@')) return envFrom;
+    if (this.domain.startsWith('sandbox')) return `postmaster@${this.domain}`;
+    return `noreply@${this.domain}`;
   }
 
   async sendEmail(to: string, subject: string, html: string, text?: string) {
@@ -18,7 +25,7 @@ export class MailgunProvider implements EmailProvider {
     try {
       const url = `https://api.mailgun.net/v3/${this.domain}/messages`;
       const form = new URLSearchParams();
-      form.append('from', `Legal AI <noreply@${this.domain}>`);
+      form.append('from', `Legal AI <${this.resolveFromEmail()}>`);
       form.append('to', to);
       form.append('subject', subject);
       form.append('html', html);

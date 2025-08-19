@@ -2,50 +2,69 @@
 
 Email Automation service (Node + TypeScript) with:
 - Template CRUD + preview
-- Mailgun provider adapter (graceful when not configured)
-- Mailgun webhook with signature verification and event storage
+- Mailgun provider adapter (graceful when not configured), supports FROM_EMAIL env and sandbox default (postmaster@&lt;domain&gt;)
+- Mailgun webhook with dual HMAC verification (headers or body) and event storage
 - Simple Campaigns (create/start/stop) with 30s scheduler and batching
+- Events listing endpoint for quick debugging
 
-## Quickstart
+## Quickstart (Local)
 1) Setup
 - cp .env.example .env
-- Fill MONGO_URL and DB_NAME
-- (Optional) set MAILGUN_API_KEY, MAILGUN_DOMAIN, MAILGUN_SIGNING_KEY when ready
+- Set: MONGO_URL, DB_NAME
+- Set: MAILGUN_API_KEY, MAILGUN_DOMAIN, MAILGUN_SIGNING_KEY
+- Optional: FROM_EMAIL (otherwise defaults to postmaster@&lt;sandbox-domain&gt; or noreply@&lt;domain&gt;)
 - yarn install
 - yarn dev
 
 2) Seed a sample template
 - yarn ts-node src/scripts/seed.ts
 
-3) Try the API (examples use localhost:8085)
-- Health: curl http://localhost:8085/health
-- List templates: curl http://localhost:8085/api/templates
-- Preview template:
-  curl -X POST http://localhost:8085/api/templates/preview \
-    -H 'Content-Type: application/json' \
-    -d '{"slug":"welcome","variables":{"firstName":"Chris","firmName":"CDV Law"}}'
-- Create campaign:
-  curl -X POST http://localhost:8085/api/campaigns \
-    -H 'Content-Type: application/json' \
-    -d '{"name":"Test","templateSlug":"welcome","recipients":["you@example.com"]}'
-- Start campaign:
-  curl -X POST http://localhost:8085/api/campaigns/<campaignId>/start
-- Send test email (provider must be configured):
-  curl -X POST http://localhost:8085/api/send/test \
-    -H 'Content-Type: application/json' \
-    -d '{"to":"test@example.com","subject":"Test","html":"<b>Hi</b>"}'
+3) Try the API (localhost:8085)
+- Health: GET /health
+- Templates: GET /api/templates
+- Preview: POST /api/templates/preview { slug:"welcome", variables:{ firstName, firmName } }
+- Campaigns: POST /api/campaigns { name, templateSlug:"welcome", recipients:["you@example.com"] }, then POST /api/campaigns/:id/start
+- Send test: POST /api/send/test { to, subject, html }
+- Events: GET /api/events?limit=20
 
 4) Webhooks (Mailgun)
-- Configure Mailgun to POST events to: http://<your-domain>/api/webhooks/mailgun
-- Signature is verified using MAILGUN_SIGNING_KEY; events are saved to the events collection
+- POST /api/webhooks/mailgun
+- We verify HMAC via MAILGUN_SIGNING_KEY using either request headers (X-Mailgun-*) or body.signature fields.
+- Events are stored into the events collection.
 
-## API docs
-See docs/API.md for endpoints and payloads. See docs/PROVIDERS.md for Mailgun configuration.
+## Deploy on Emergent (Kubernetes)
+We support path-based ingress at /email-api.
+
+1) Build & Push Docker Image (GitHub Actions)
+- On merge to main, CI builds and pushes: ghcr.io/&lt;owner&gt;/aiagent-emailautomation-clean:latest
+- Workflow: .github/workflows/build.yml
+
+2) Configure Kubernetes manifests (k8s/)
+- k8s/configmap.yaml: non-secret config (PORT, DB_NAME)
+- k8s/secret.example.yaml: copy to secret.yaml and insert real values
+  - MONGO_URL
+  - MAILGUN_API_KEY
+  - MAILGUN_DOMAIN
+  - MAILGUN_SIGNING_KEY
+  - FROM_EMAIL (recommended for sandbox)
+- k8s/deployment.yaml: set image to your GHCR image
+- k8s/service.yaml
+- k8s/ingress.yaml: set your host (YOUR_DOMAIN_HERE)
+
+3) Apply (order)
+- kubectl apply -f k8s/configmap.yaml
+- kubectl apply -f k8s/secret.yaml
+- kubectl apply -f k8s/deployment.yaml
+- kubectl apply -f k8s/service.yaml
+- kubectl apply -f k8s/ingress.yaml
+
+4) Verify
+- GET https://YOUR_DOMAIN/email-api/health
+- GET https://YOUR_DOMAIN/email-api/api/templates
+- POST https://YOUR_DOMAIN/email-api/api/send/test
+- Configure Mailgun webhooks to: https://YOUR_DOMAIN/email-api/api/webhooks/mailgun
+- GET https://YOUR_DOMAIN/email-api/api/events?limit=20
 
 ## Security
-- Optional API key protection via x-api-key header (set API_KEY in .env)
-- No provider keys required to boot; provider_not_configured returned when not set
-
-## Notes
-- Scheduler processes running campaigns every 30 seconds in small batches
-- Indexes are ensured on startup for templates, campaigns, events
+- Use repo secrets for CI & Kubernetes Secret for runtime
+- Never commit keys; rotate keys periodically

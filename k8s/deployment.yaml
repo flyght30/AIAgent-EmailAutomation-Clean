@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: email-automation
+  labels:
+    app: email-automation
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: email-automation
+  template:
+    metadata:
+      labels:
+        app: email-automation
+    spec:
+      containers:
+        - name: email-automation
+          image: ghcr.io/flyght30/aiagent-emailautomation-clean:latest # build & push your image
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8085
+          envFrom:
+            - secretRef:
+                name: email-automation-secrets
+            - configMapRef:
+                name: email-automation-config
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8085
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8085
+            initialDelaySeconds: 10
+            periodSeconds: 20

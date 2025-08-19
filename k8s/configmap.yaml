@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: email-automation-config
+  labels:
+    app: email-automation
+data:
+  PORT: "8085"
+  DB_NAME: "email_automation"
